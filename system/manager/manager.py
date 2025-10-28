@@ -88,8 +88,6 @@ def manager_init() -> None:
                        dirty=build_metadata.openpilot.is_dirty,
                        device=HARDWARE.get_device_type())
 
-  params.put_bool("ExperimentalMode", True)
-
 
   # preimport all processes
   for p in managed_processes.values():
