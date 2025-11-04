@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/cristianku/GitHub/openpilot_testing/opendbc_repo show d3c3c426)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
