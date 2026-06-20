@@ -1,0 +1,88 @@
+name: Rebuild Peugeot 3008 openpilot
+
+on:
+  workflow_dispatch:
+  schedule:
+    # ogni giorno alle 03:30 UTC
+    - cron: "30 3 * * *"
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM_REPO: https://github.com/commaai/openpilot.git
+  TARGET_REPO: https://github.com/cristianku/openpilot.git
+  TARGET_BRANCH: peugeot-3008-sunny
+  OPENDBC_REPO: https://github.com/cristianku/opendbc.git
+  OPENDBC_BRANCH: master
+  DOCKER_IMAGE: cristianku/openpilot:peugeot-3008-sunny
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout builder repo
+        uses: actions/checkout@v4
+
+      - name: Configure git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Clone commaai/openpilot master
+        run: |
+          rm -rf work
+          mkdir -p work
+
+          git clone --recursive --branch master "$UPSTREAM_REPO" work/openpilot
+
+      - name: Replace opendbc_repo with cristianku/opendbc
+        run: |
+          cd work/openpilot
+
+          # cambia URL del submodule opendbc_repo
+          git config -f .gitmodules submodule.opendbc_repo.url "$OPENDBC_REPO"
+          git submodule sync opendbc_repo
+
+          # elimina il submodule originale e ricaricalo dal tuo repo
+          git submodule deinit -f opendbc_repo || true
+          rm -rf .git/modules/opendbc_repo opendbc_repo
+
+          git submodule update --init opendbc_repo
+
+          cd opendbc_repo
+          git fetch origin "$OPENDBC_BRANCH"
+          git checkout --detach "origin/$OPENDBC_BRANCH"
+          OPENDBC_SHA=$(git rev-parse HEAD)
+          cd ..
+
+          git add .gitmodules opendbc_repo
+          git commit -m "Sync openpilot master with cristianku/opendbc ${OPENDBC_SHA}" || echo "No changes to commit"
+
+      - name: Push generated branch to cristianku/openpilot
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          cd work/openpilot
+
+          git remote add target "https://x-access-token:${GH_PAT}@github.com/cristianku/openpilot.git"
+          git push target HEAD:${TARGET_BRANCH} --force
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./work/openpilot
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
