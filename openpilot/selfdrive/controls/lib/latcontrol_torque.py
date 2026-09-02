@@ -108,10 +108,13 @@ class LatControlTorque(LatControl):
                                                      desired_curvature, measured_curvature, steer_limited_by_safety, output_torque)
 
       pid_log.active = True
-      pid_log.p = float(self.pid.p)
-      pid_log.i = float(self.pid.i)
-      pid_log.d = float(self.pid.d)
-      pid_log.f = float(self.pid.f)
+      # [nnlc] - START
+      active_pid = self.extension._pid if self.extension._nnlc_enabled else self.pid
+      pid_log.p = float(active_pid.p)
+      pid_log.i = float(active_pid.i)
+      pid_log.d = float(active_pid.d)
+      pid_log.f = float(active_pid.f)
+      # [nnlc] - END
       pid_log.output = float(-output_torque) # TODO: log lat accel?
       pid_log.actualLateralAccel = float(measurement)
       pid_log.desiredLateralAccel = float(setpoint)

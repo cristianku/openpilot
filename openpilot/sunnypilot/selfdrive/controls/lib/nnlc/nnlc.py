@@ -8,7 +8,9 @@ from collections import deque
 import math
 import numpy as np
 
-from opendbc.car.lateral import FRICTION_THRESHOLD, get_friction
+# [nnlc] - START
+from opendbc.car.lateral import FRICTION_THRESHOLD
+# [nnlc] - END
 from opendbc.sunnypilot.car.interfaces import LatControlInputs
 from opendbc.sunnypilot.car.lateral_ext import get_friction as get_friction_in_torque_space
 from openpilot.common.filter_simple import FirstOrderFilter
@@ -35,6 +37,9 @@ def roll_pitch_adjust(roll, pitch):
 class NeuralNetworkLateralControl(LatControlTorqueJerkAware):
   def __init__(self, lac_torque, CP, CP_SP, CI):
     super().__init__(lac_torque, CP, CP_SP, CI)
+    # [nnlc] - START
+    self._nnlc_pid = self._pid
+    # [nnlc] - END
     self.params = Params()
     self.enabled = self.params.get_bool("NeuralNetworkLateralControl")
     model_path = CP_SP.neuralNetworkLateralControl.model.path
@@ -155,6 +160,8 @@ class NeuralNetworkLateralControl(LatControlTorqueJerkAware):
 
     # apply friction override for cars with low NN friction response
     if self.model.friction_override:
-      self._pid_log.error += get_friction(friction_input, self._lateral_accel_deadzone, FRICTION_THRESHOLD, self.torque_params)
+      # [nnlc] - START
+      self._pid_log.error += get_friction_in_torque_space(friction_input, self._lateral_accel_deadzone, FRICTION_THRESHOLD, self.torque_params)
+      # [nnlc] - END
 
     self.update_output_torque(CS)

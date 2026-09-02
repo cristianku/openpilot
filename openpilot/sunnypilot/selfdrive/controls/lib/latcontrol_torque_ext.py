@@ -18,7 +18,10 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
              desired_lateral_accel, actual_lateral_accel, lateral_accel_deadzone, gravity_adjusted_lateral_accel,
              desired_curvature, actual_curvature, steer_limited_by_safety, output_torque):
     self._ff = ff
-    self._pid = pid
+    # [nnlc] - START
+    # Use the dedicated torque-space PID only while NNLC is active.
+    self._pid = self._nnlc_pid if self._nnlc_enabled else pid
+    # [nnlc] - END
     self._pid_log = pid_log
     self._setpoint = setpoint
     self._measurement = measurement
