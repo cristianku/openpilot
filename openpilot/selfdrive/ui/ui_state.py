@@ -69,8 +69,7 @@ class UIState(UIStateSP):
         "selfdriveState",
         "longitudinalPlan",
         "gpsLocationExternal",
-        "gpsLocation",
-        "navInstruction",
+        "navInstruction",  # nav alpha; gpsLocation comes from sm_services_ext, a duplicate subscription crashes SubMaster
         "carOutput",
         "carControl",
         "vehicleParameters",

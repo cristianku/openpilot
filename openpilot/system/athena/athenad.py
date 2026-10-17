@@ -385,19 +385,6 @@ def getVersion() -> dict[str, str]:
   }
 
 
-@dispatcher.add_method
-def setNavDestination(latitude: int = 0, longitude: int = 0, place_name: str | None = None, place_details: str | None = None) -> dict[str, int]:
-  destination = {
-    "latitude": latitude,
-    "longitude": longitude,
-    "place_name": place_name,
-    "place_details": place_details,
-  }
-  Params().put("NavDestination", json.dumps(destination))
-
-  return {"success": 1}
-
-
 def scan_dir(path: str, prefix: str, base: str | None = None) -> list[str]:
   if base is None:
     base = path
