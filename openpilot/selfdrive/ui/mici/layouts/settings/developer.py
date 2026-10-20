@@ -7,6 +7,7 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.selfdrive.ui.layouts.settings.common import restart_needed_callback
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.widgets.ssh_key import SshKeyFetcher
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.nav_destination import NavDestinationButton
 
 
 class AlphaLongConfirmPage(NavScroller):
@@ -99,6 +100,7 @@ class DeveloperLayoutMici(NavScroller):
       self._alpha_long_toggle,
       self._debug_mode_toggle,
       self._navigation_toggle,
+      NavDestinationButton(),
     ])
 
     # Toggle lists
