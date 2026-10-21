@@ -11,6 +11,7 @@ from requests.exceptions import (SSLError, RequestException, HTTPError)
 from openpilot.common.params import Params
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.models.helpers import is_bundle_version_compatible
+from openpilot.sunnypilot.models.extra_catalog import fetch_extra_bundles, merge_extra_bundles
 from openpilot.cereal import custom
 
 
@@ -128,10 +129,19 @@ class ModelFetcher:
       for source, (_, suffix) in self.MODEL_SOURCES.items()
     }
     self._refetched: set[str] = set()
+    # No qcom url: without it sunnylink reads the small models from this device's cache
+    # (ModelManager_ModelsCache), which also holds the extra catalog (extra_catalog.py).
     self.params.put("ModelManager_ActiveJson", {
-      "qcom": self.MODEL_URL,
       "chestnut": self.MODEL_URL_CHESTNUT,
     }, block=True)
+
+  @staticmethod
+  def _is_valid_bundle(bundle: dict) -> bool:
+    try:
+      ModelParser.parse_models({"bundles": [bundle]})
+    except Exception:
+      return False
+    return True
 
   @staticmethod
   def active_source(chestnut_present: bool) -> str:
@@ -154,6 +164,9 @@ class ModelFetcher:
       response.raise_for_status()
 
       json_data = response.json()
+      if source == "qcom":
+        previous_cache, _ = self.model_caches[source].get()
+        json_data = merge_extra_bundles(json_data, fetch_extra_bundles(), previous_cache, self._is_valid_bundle)
       parsed = self.model_parser.parse_models(json_data)
       if parsed:
         self.model_caches[source].set(json_data)
