@@ -429,13 +429,15 @@ class TestModelFetcherSources(OpenpilotTestCase):
   def test_get_cached_bundles_unknown_source(self):
     assert get_cached_bundles(mock.MagicMock(), "bogus") == []
 
-  def test_active_json_has_both_urls(self):
+  def test_active_json_has_only_chestnut_url(self):
+    # [distill catalog] - START
+    # SunnyLink reads qcom small models (with Distill) from the device cache.
+    # [distill catalog] - END
     params = mock.MagicMock()
     ModelFetcher(params)
     active_json_calls = [call for call in params.put.call_args_list if call.args[0] == "ModelManager_ActiveJson"]
     assert active_json_calls, "expected ModelManager_ActiveJson to be written"
     assert active_json_calls[-1].args[1] == {
-      "qcom": ModelFetcher.MODEL_URL,
       "chestnut": ModelFetcher.MODEL_URL_CHESTNUT,
     }
 
