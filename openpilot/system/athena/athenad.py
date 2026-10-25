@@ -46,6 +46,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.common.version import get_build_metadata
 from openpilot.common.hardware.hw import Paths
 from openpilot.system.athena.rpc import dispatcher, dumps_call, handle, is_call, is_response, loads
+import openpilot.selfdrive.navigation.nav2pilot.athena  # noqa: F401  # nav2pilot: registers setNavRoute and setMapboxToken
 
 
 ATHENA_HOST = os.getenv('ATHENA_HOST', 'wss://athena.comma.ai')
