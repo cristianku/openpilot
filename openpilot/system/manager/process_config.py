@@ -94,6 +94,10 @@ def is_stock_model(started, params, CP: car.CarParams) -> bool:
   """Check if the active model runner is stock."""
   return bool(get_active_model_runner(params, not started) == custom.ModelManagerSP.Runner.stock)
 
+def speed_vision(started: bool, params: Params, CP: car.CarParams) -> bool:
+  """The speed-limits networks' reading is shown (Show Vision Speed Limit) or used (Map Data + Vision)."""
+  return params.get_bool("SpeedLimitVisionDisplay") or params.get("SpeedLimitPolicy", return_default=True) == 5
+
 def mapd_ready(started: bool, params: Params, CP: car.CarParams) -> bool:
   return bool(os.path.exists(Paths.mapd_root()))
 
@@ -125,7 +129,7 @@ procs = [
   PythonProcess("timed", "openpilot.system.timed", always_run, enabled=not PC),
 
   PythonProcess("modeld", "openpilot.selfdrive.modeld.modeld", and_(only_onroad, is_stock_model)),
-  PythonProcess("navd", "openpilot.selfdrive.navigation.navd", navigation),
+  PythonProcess("navd", "openpilot.sunnypilot.navd.navd", navigation),  # upstream navd + Nav2Pilot waypoints and Mapbox token
   PythonProcess("mapsd", "openpilot.selfdrive.navigation.mapsd", navigation),
   PythonProcess("dmonitoringmodeld", "openpilot.selfdrive.modeld.dmonitoringmodeld", driverview, enabled=(WEBCAM or not PC)),
 
@@ -176,6 +180,10 @@ procs += [
   PythonProcess("models_manager", "openpilot.sunnypilot.models.manager", only_offroad),
   NativeProcess("modeld_tinygrad", "openpilot/sunnypilot/modeld_v2", ["./modeld"], and_(only_onroad, is_tinygrad_model)),
   PythonProcess("modeld_warmup", "openpilot.sunnypilot.modeld_v2.warmup", only_offroad),
+
+  # Speed limits read on the road camera
+  PythonProcess("speedvisiond", "openpilot.sunnypilot.speed_limits.speedvisiond", and_(only_onroad, speed_vision)),
+  PythonProcess("speed_limits_warmup", "openpilot.sunnypilot.speed_limits.warmup", and_(only_offroad, speed_vision)),
 
   # Backup
   PythonProcess("backup_manager", "openpilot.sunnypilot.sunnylink.backups.manager", and_(only_offroad, sunnylink_ready_shim)),

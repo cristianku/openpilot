@@ -453,10 +453,13 @@ class TestModelFetcher(OpenpilotTestCase):
     assert [b.ref for b in get_cached_bundles(params, "qcom")] == ["aaa"]
     assert [b.ref for b in get_cached_bundles(params, "chestnut")] == ["bbb"]
 
-  def test_active_json_has_both_urls(self):
+  def test_active_json_has_only_chestnut_url(self):
+    # [distill catalog] - START
+    # SunnyLink reads qcom small models (with Distill) from the device cache.
+    # [distill catalog] - END
     params = mock.MagicMock()
     ModelFetcher(params)
-    params.put.assert_any_call("ModelManager_ActiveJson", {"qcom": ModelFetcher.MODEL_URL, "chestnut": ModelFetcher.MODEL_URL_CHESTNUT}, block=True)
+    params.put.assert_any_call("ModelManager_ActiveJson", {"chestnut": ModelFetcher.MODEL_URL_CHESTNUT}, block=True)
 
   def test_matching_caches_are_used_without_fetch(self):
     fetcher = ModelFetcher(manifest_params({"bundles": [manifest_bundle("small", "aaa")]}))

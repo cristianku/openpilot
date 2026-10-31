@@ -773,7 +773,21 @@
           "id": "speed_limits",
           "title": "Speed Limits",
           "description": "Speed limit detection and offset behavior",
-          "items": [],
+          "items": [
+            {
+              "key": "SpeedLimitVisionDisplay",
+              "widget": "toggle",
+              "title": "Show Vision Speed Limit",
+              "description": "Show the speed limit the neural network reads from the road camera, in a fuchsia square in the bottom left corner of the driving screen. Information only, it does not change the speed. A grey ring means no reading. Always shown when Speed Limit Source is Map Data + Vision.",
+              "visibility": [
+                {
+                  "type": "capability",
+                  "field": "device_type",
+                  "equals": "mici"
+                }
+              ]
+            }
+          ],
           "sub_panels": [
             {
               "id": "speed_limit_settings",
@@ -847,6 +861,19 @@
                   ]
                 },
                 {
+                  "key": "SpeedLimitSetSpeedEngageOnly",
+                  "widget": "toggle",
+                  "title": "Set Speed Only Engages (Alpha)",
+                  "description": "The car drives at the speed limit it knows, also above the set speed. The set speed only engages, and is the speed while no limit is known. Curves still slow the car down. Only with the external GPU (the big driving model); without it the set speed stays the maximum. A green AUTO square shows it on the driving screen, and the set speed is no longer shown.",
+                  "visibility": [
+                    {
+                      "type": "param",
+                      "key": "SpeedLimitMode",
+                      "equals": 3
+                    }
+                  ]
+                },
+                {
                   "key": "SpeedLimitPolicy",
                   "widget": "multiple_button",
                   "title": "Speed Limit Source",
@@ -870,6 +897,10 @@
                     {
                       "value": 4,
                       "label": "Combined"
+                    },
+                    {
+                      "value": 5,
+                      "label": "Map Data + Vision"
                     }
                   ]
                 },

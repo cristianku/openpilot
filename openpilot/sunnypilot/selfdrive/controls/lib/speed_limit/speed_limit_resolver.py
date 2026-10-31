@@ -54,6 +54,7 @@ class SpeedLimitResolver:
       Policy.car_state_priority: [SpeedLimitSource.car, SpeedLimitSource.map],
       Policy.map_data_priority: [SpeedLimitSource.map, SpeedLimitSource.car],
       Policy.combined: [SpeedLimitSource.car, SpeedLimitSource.map],
+      Policy.map_data_vision: [SpeedLimitSource.vision, SpeedLimitSource.map],
     }
     self.source = SpeedLimitSource.none
     for source in ALL_SOURCES:
@@ -115,6 +116,18 @@ class SpeedLimitResolver:
     self.limit_solutions[SpeedLimitSource.car] = sm['carStateSP'].speedLimit
     self.distance_solutions[SpeedLimitSource.car] = 0.
 
+  def _get_from_vision(self, sm: messaging.SubMaster) -> None:
+    """The limit of the speed-limits neural network (speedVisionSP): 0 when it is not sure or speedvisiond is not
+    running (a stale message is never used). Only the policy Map Data + Vision takes it."""
+    self._reset_limit_sources(SpeedLimitSource.vision)
+    try:
+      alive = sm.alive['speedVisionSP']
+      speed_limit = sm['speedVisionSP'].speedLimit
+    except KeyError:
+      return
+    if alive:
+      self.limit_solutions[SpeedLimitSource.vision] = max(0., speed_limit)
+
   def _get_from_map_data(self, sm: messaging.SubMaster) -> None:
     self._reset_limit_sources(SpeedLimitSource.map)
     self._process_map_data(sm)
@@ -170,6 +183,7 @@ class SpeedLimitResolver:
   def _resolve_limit_sources(self, sm: messaging.SubMaster) -> tuple[float, float, custom.LongitudinalPlanSP.SpeedLimit.Source]:
     """Get limit solutions from each data source"""
     self._get_from_car_state(sm)
+    self._get_from_vision(sm)
     self._get_from_map_data(sm)
 
     source = self._get_source_solution_according_to_policy()
