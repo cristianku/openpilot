@@ -125,7 +125,7 @@ procs = [
   PythonProcess("timed", "openpilot.system.timed", always_run, enabled=not PC),
 
   PythonProcess("modeld", "openpilot.selfdrive.modeld.modeld", and_(only_onroad, is_stock_model)),
-  PythonProcess("navd", "openpilot.selfdrive.navigation.navd", navigation),
+  PythonProcess("navd", "openpilot.sunnypilot.navd.navd", navigation),  # upstream navd + Nav2Pilot waypoints and Mapbox token
   PythonProcess("mapsd", "openpilot.selfdrive.navigation.mapsd", navigation),
   PythonProcess("dmonitoringmodeld", "openpilot.selfdrive.modeld.dmonitoringmodeld", driverview, enabled=(WEBCAM or not PC)),
 
