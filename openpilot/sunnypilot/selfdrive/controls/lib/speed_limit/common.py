@@ -14,6 +14,8 @@ class Policy(IntEnumBase):
   car_state_priority = 2
   map_data_priority = 3
   combined = 4
+  map_data_vision = 5  # the speed-limits neural network's limit (speedVisionSP) when it has one, else the map
+  vision_only = 6  # only the speed-limits neural network's limit (speedVisionSP): no limit when it has none
 
 
 class OffsetType(IntEnumBase):
@@ -27,3 +29,4 @@ class Mode(IntEnumBase):
   information = 1
   warning = 2
   assist = 3
+  smartspeed = 4  # the brain chooses the speed, on every car: no confirmation, the set speed only engages

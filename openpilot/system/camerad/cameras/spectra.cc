@@ -280,6 +280,10 @@ void SpectraCamera::camera_open(VisionIpcServer *v) {
 
   if (!enabled) return;
 
+  // only the BPS gives a frame both ways, scaled and as the sensor sent it. A sensor that does not scale has one size already
+  full_stream = full_stream && sensor->out_scale > 1;
+  if (full_stream) cc.output_type = ISP_BPS_PROCESSED;
+
   buf.out_img_width = sensor->frame_width / sensor->out_scale;
   buf.out_img_height = (sensor->hdr_offset > 0 ? (sensor->frame_height - sensor->hdr_offset) / 2 : sensor->frame_height) / sensor->out_scale;
 
@@ -470,6 +474,7 @@ void SpectraCamera::config_bps(int idx, int request_id) {
   int num_patches = needs_downscale ? 14 : 12;
   int size = sizeof(struct cam_packet) + sizeof(struct cam_cmd_buf_desc)*2 + sizeof(struct cam_buf_io_cfg)*num_io_cfgs;
   size += sizeof(struct cam_patch_desc)*num_patches;
+  const int full_handle = full_stream ? buf_handle_full[idx] : bps_fullres_dummy.handle;
 
   uint32_t cam_packet_handle = 0;
   auto pkt = m->mem_mgr.alloc<struct cam_packet>(size, &cam_packet_handle);
@@ -675,11 +680,11 @@ void SpectraCamera::config_bps(int idx, int request_id) {
     io_cfg[1].framedrop_pattern = 0x1;
 
     if (needs_downscale) {
-      // downscaling needs a full res placeholder
+      // downscaling needs a full res output: a placeholder, or the full stream's buffer
       uint32_t full_stride, full_y_h, full_uv_h, full_yuv_size;
       std::tie(full_stride, full_y_h, full_uv_h, full_yuv_size) = get_nv12_info(sensor->frame_width, sensor->frame_height);
-      io_cfg[2].mem_handle[0] = bps_fullres_dummy.handle;
-      io_cfg[2].mem_handle[1] = bps_fullres_dummy.handle;
+      io_cfg[2].mem_handle[0] = full_handle;
+      io_cfg[2].mem_handle[1] = full_handle;
       io_cfg[2].planes[0] = (struct cam_plane_cfg){
         .width = sensor->frame_width,
         .height = sensor->frame_height,
@@ -721,8 +726,8 @@ void SpectraCamera::config_bps(int idx, int request_id) {
     add_patch(pkt.get(), bps_cmd.handle, buf_desc[0].offset + offsetof(bps_tmp, frames[0].ptr[0]), buf_handle_raw[idx], 0);
 
     if (needs_downscale) {
-      add_patch(pkt.get(), bps_cmd.handle, buf_desc[0].offset + offsetof(bps_tmp, frames[1].ptr[0]), bps_fullres_dummy.handle, 0);
-      add_patch(pkt.get(), bps_cmd.handle, buf_desc[0].offset + offsetof(bps_tmp, frames[1].ptr[1]), bps_fullres_dummy.handle, io_cfg[2].offsets[1]);
+      add_patch(pkt.get(), bps_cmd.handle, buf_desc[0].offset + offsetof(bps_tmp, frames[1].ptr[0]), full_handle, 0);
+      add_patch(pkt.get(), bps_cmd.handle, buf_desc[0].offset + offsetof(bps_tmp, frames[1].ptr[1]), full_handle, io_cfg[2].offsets[1]);
       // output frame at REG1
       add_patch(pkt.get(), bps_cmd.handle, buf_desc[0].offset + offsetof(bps_tmp, frames[7].ptr[0]), buf_handle_yuv[idx], 0);
       add_patch(pkt.get(), bps_cmd.handle, buf_desc[0].offset + offsetof(bps_tmp, frames[7].ptr[1]), buf_handle_yuv[idx], io_cfg[1].offsets[1]);
@@ -1030,6 +1035,15 @@ void SpectraCamera::camera_map_bufs() {
       LOGD("map buf req: (fd: %d) 0x%x %d", vb->fd, mem_mgr_map_cmd.out.buf_handle, ret);
       buf_handle_yuv[i] = mem_mgr_map_cmd.out.buf_handle;
     }
+
+    if (full_stream) {
+      VisionBuf *vb = buf.vipc_server->get_buffer(VISION_STREAM_NARROW_ROAD_FULL, i);
+      mem_mgr_map_cmd.fd = vb->fd;
+      ret = do_cam_control(m->video0_fd, CAM_REQ_MGR_MAP_BUF, &mem_mgr_map_cmd, sizeof(mem_mgr_map_cmd));
+      assert(ret == 0);
+      LOGD("map buf req: (fd: %d) 0x%x %d", vb->fd, mem_mgr_map_cmd.out.buf_handle, ret);
+      buf_handle_full[i] = mem_mgr_map_cmd.out.buf_handle;
+    }
   }
 }
 
@@ -1220,7 +1234,7 @@ void SpectraCamera::configICP() {
   // size comes from the BPSStripingLib
   bps_cdm_striping_bl.init(m, 0xcfe0, 0x20, true, m->icp_device_iommu);
 
-  if (sensor->out_scale > 1) {
+  if (sensor->out_scale > 1 && !full_stream) {
     uint32_t full_stride, full_y_h, full_uv_h, full_yuv_size;
     std::tie(full_stride, full_y_h, full_uv_h, full_yuv_size) = get_nv12_info(sensor->frame_width, sensor->frame_height);
     bps_fullres_dummy.init(m, full_yuv_size, 0x1000, true, m->icp_device_iommu);
@@ -1378,6 +1392,9 @@ void SpectraCamera::camera_close() {
       }
       if (buf_handle_yuv[i]) {
         release(m->video0_fd, buf_handle_yuv[i]);
+      }
+      if (buf_handle_full[i]) {
+        release(m->video0_fd, buf_handle_full[i]);
       }
     }
     LOGD("released buffers");
