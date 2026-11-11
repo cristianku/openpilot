@@ -1,0 +1,26 @@
+from SCons.Script import Action
+
+Import('env', 'arch')
+
+# The speed-limits networks are compiled by the build the device runs at boot, so that speedvisiond reads from the start
+# of the first drive after an update: the warmup compiles offroad only, too late when one drives off right away. They
+# go where runner.compiled_path keeps them, by the hash of each ONNX, so an update with the same networks compiles
+# nothing. A network that fails to compile never fails the build: the warmup and speedvisiond try it again.
+if arch == "comma_arm64":
+  def compile_networks(target, source, env):
+    try:
+      from openpilot.sunnypilot.speed_limits import runner
+      files = runner.networks()
+    except Exception as e:
+      print(f"speed limits: no network compiled at the build, the warmup compiles them: {e}")
+      return 0
+    for onnx in files.onnx() if files else ():
+      try:
+        runner.compile_network(onnx)
+      except Exception as e:
+        print(f"speed limits: {onnx.name} did not compile at the build, the warmup tries again: {e}")
+    return 0
+
+  networks = env.Command('networks.compiled', [], Action(compile_networks, "  [ONNX] speed limits networks"))
+  env.AlwaysBuild(networks)
+  env.NoCache(networks)

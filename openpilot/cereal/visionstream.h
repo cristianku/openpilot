@@ -7,4 +7,5 @@ enum VisionStreamValues : VisionStreamType {
   VISION_STREAM_CABIN = 1,
   VISION_STREAM_WIDE_ROAD = 2,
   VISION_STREAM_MAP = 3,
+  VISION_STREAM_NARROW_ROAD_FULL = 4,  // the road camera before the scaling, only with a Developer switch on
 };

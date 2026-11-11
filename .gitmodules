@@ -20,3 +20,6 @@
 	path = openpilot/sunnypilot/neural_network_data
   url = https://github.com/sunnypilot/neural-network-data.git
 
+[submodule "sunnypilot/speed_limits/models"]
+  path = openpilot/sunnypilot/speed_limits/models
+  url = https://github.com/cristianku/speed-limits-models.git

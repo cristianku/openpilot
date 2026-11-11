@@ -19,7 +19,7 @@ from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.widgets.network import NavButton
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 
-SPEED_LIMIT_MODE_BUTTONS = [tr("Off"), tr("Info"), tr("Warning"), tr("Assist")]
+SPEED_LIMIT_MODE_BUTTONS = [tr("Off"), tr("Info"), tr("Warning"), tr("Assist"), tr("Smart")]
 SPEED_LIMIT_OFFSET_TYPE_BUTTONS = [tr("None"), tr("Fixed"), tr("%")]
 
 SPEED_LIMIT_MODE_DESCRIPTIONS = [
@@ -27,6 +27,7 @@ SPEED_LIMIT_MODE_DESCRIPTIONS = [
   tr("Information: Displays the current road's speed limit."),
   tr("Warning: Provides a warning when exceeding the current road's speed limit."),
   tr("Assist: Adjusts the vehicle's cruise speed based on the current road's speed limit when operating the +/- buttons."),
+  tr("Smartspeed: The brain, the neural network that watches the road, chooses the speed. The cruise button only turns it on and off."),
 ]
 
 SPEED_LIMIT_OFFSET_DESCRIPTIONS = [
@@ -60,7 +61,7 @@ class SpeedLimitSettingsLayout(Widget):
       description=self._get_mode_description,
       buttons=SPEED_LIMIT_MODE_BUTTONS,
       param="SpeedLimitMode",
-      button_width=380,
+      button_width=300,
     )
 
     self._source_button = simple_button_item_sp(
@@ -139,7 +140,7 @@ class SpeedLimitSettingsLayout(Widget):
       sla_always_disallow = brand == "rivian"
       sla_available = (has_long or has_icbm) and not sla_disallow_in_release and not sla_always_disallow
 
-      if not sla_available and speed_limit_mode_param == int(SpeedLimitMode.assist):
+      if not sla_available and speed_limit_mode_param in (int(SpeedLimitMode.assist), int(SpeedLimitMode.smartspeed)):
         ui_state.params.put("SpeedLimitMode", int(SpeedLimitMode.warning))
 
     else:

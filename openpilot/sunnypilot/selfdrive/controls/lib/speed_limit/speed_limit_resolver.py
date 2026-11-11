@@ -54,6 +54,8 @@ class SpeedLimitResolver:
       Policy.car_state_priority: [SpeedLimitSource.car, SpeedLimitSource.map],
       Policy.map_data_priority: [SpeedLimitSource.map, SpeedLimitSource.car],
       Policy.combined: [SpeedLimitSource.car, SpeedLimitSource.map],
+      Policy.map_data_vision: [SpeedLimitSource.vision],  # a stored 5 not moved to vision_only yet: the same, no map
+      Policy.vision_only: [SpeedLimitSource.vision],
     }
     self.source = SpeedLimitSource.none
     for source in ALL_SOURCES:
@@ -80,6 +82,10 @@ class SpeedLimitResolver:
     if self.speed_limit > 0.:
       self.speed_limit_last = self.speed_limit
       self.speed_limit_final_last = self.speed_limit_final
+    elif Policy(self.policy) in (Policy.vision_only, Policy.map_data_vision):
+      # Planner/SLA also use the last valid solution. A zero current vision limit alone cannot revoke that target.
+      self.speed_limit_last = 0.
+      self.speed_limit_final_last = 0.
 
   @property
   def speed_limit_valid(self) -> bool:
@@ -115,41 +121,56 @@ class SpeedLimitResolver:
     self.limit_solutions[SpeedLimitSource.car] = sm['carStateSP'].speedLimit
     self.distance_solutions[SpeedLimitSource.car] = 0.
 
+  def _get_from_vision(self, sm: messaging.SubMaster) -> None:
+    """The limit of the speed-limits neural network (speedVisionSP): 0 when it is not sure or speedvisiond is not
+    running (a stale message is never used), and its limit ahead like the map's. Only Smartspeed (Vision Only, and a
+    stored Map Data + Vision) takes it."""
+    self._reset_limit_sources(SpeedLimitSource.vision)
+    try:
+      alive = sm.alive['speedVisionSP']
+      vision = sm['speedVisionSP']
+    except KeyError:
+      return
+    if alive:
+      self._calculate_limits(SpeedLimitSource.vision, max(0., vision.speedLimit), vision.speedLimitAhead,
+                             vision.speedLimitAheadDistance, sm.recv_time['speedVisionSP'])
+
   def _get_from_map_data(self, sm: messaging.SubMaster) -> None:
     self._reset_limit_sources(SpeedLimitSource.map)
     self._process_map_data(sm)
 
   def _process_map_data(self, sm: messaging.SubMaster) -> None:
-    gps_data = sm[self._gps_location_service]
     map_data = sm['liveMapDataSP']
 
-    gps_fix_age = time.monotonic() - gps_data.unixTimestampMillis * 1e-3
+    # recv_time is on the time.monotonic() clock; the fix's unixTimestampMillis is Unix time
+    gps_fix_age = time.monotonic() - sm.recv_time[self._gps_location_service]
     if gps_fix_age > LIMIT_MAX_MAP_DATA_AGE:
       return
 
     speed_limit = map_data.speedLimit if map_data.speedLimitValid else 0.
     next_speed_limit = map_data.speedLimitAhead if map_data.speedLimitAheadValid else 0.
 
-    self._calculate_map_data_limits(sm, speed_limit, next_speed_limit)
+    self._calculate_limits(SpeedLimitSource.map, speed_limit, next_speed_limit, map_data.speedLimitAheadDistance,
+                           sm.recv_time['liveMapDataSP'])
 
-  def _calculate_map_data_limits(self, sm: messaging.SubMaster, speed_limit: float, next_speed_limit: float) -> None:
-    gps_data = sm[self._gps_location_service]
-    map_data = sm['liveMapDataSP']
+  def _calculate_limits(self, source: custom.LongitudinalPlanSP.SpeedLimit.Source, speed_limit: float,
+                        next_speed_limit: float, speed_limit_ahead_distance: float, recv_time: float) -> None:
+    # speedLimitAheadDistance was measured when the source sent it (mapd: 1 Hz)
+    distance_since_data = self.v_ego * (time.monotonic() - recv_time)
+    distance_to_speed_limit_ahead = max(0., speed_limit_ahead_distance - distance_since_data)
 
-    distance_since_fix = self.v_ego * (time.monotonic() - gps_data.unixTimestampMillis * 1e-3)
-    distance_to_speed_limit_ahead = max(0., map_data.speedLimitAheadDistance - distance_since_fix)
+    self.limit_solutions[source] = speed_limit
+    self.distance_solutions[source] = 0.
 
-    self.limit_solutions[SpeedLimitSource.map] = speed_limit
-    self.distance_solutions[SpeedLimitSource.map] = 0.
-
-    # FIXME-SP: this is not working as expected
-    if 0. < next_speed_limit < self.v_ego:
-      adapt_time = (next_speed_limit - self.v_ego) / LIMIT_ADAPT_ACC
-      adapt_distance = self.v_ego * adapt_time + 0.5 * LIMIT_ADAPT_ACC * adapt_time ** 2
+    # From the current limit too, so the switch holds once the car has slowed below the limit ahead
+    v_start = max(self.v_ego, speed_limit)
+    if 0. < next_speed_limit < v_start:
+      adapt_time = (next_speed_limit - v_start) / LIMIT_ADAPT_ACC
+      adapt_distance = v_start * adapt_time + 0.5 * LIMIT_ADAPT_ACC * adapt_time ** 2
 
       if distance_to_speed_limit_ahead <= adapt_distance:
-        self.limit_solutions[SpeedLimitSource.map] = next_speed_limit
-        self.distance_solutions[SpeedLimitSource.map] = distance_to_speed_limit_ahead
+        self.limit_solutions[source] = next_speed_limit
+        self.distance_solutions[source] = distance_to_speed_limit_ahead
 
   def _get_source_solution_according_to_policy(self) -> custom.LongitudinalPlanSP.SpeedLimit.Source:
     sources_for_policy = self._policy_to_sources_map[Policy(self.policy)]
@@ -170,6 +191,7 @@ class SpeedLimitResolver:
   def _resolve_limit_sources(self, sm: messaging.SubMaster) -> tuple[float, float, custom.LongitudinalPlanSP.SpeedLimit.Source]:
     """Get limit solutions from each data source"""
     self._get_from_car_state(sm)
+    self._get_from_vision(sm)
     self._get_from_map_data(sm)
 
     source = self._get_source_solution_according_to_policy()
