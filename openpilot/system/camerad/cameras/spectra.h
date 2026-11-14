@@ -163,6 +163,7 @@ public:
   int ife_buf_depth = -1;
   bool open = false;
   bool enabled = true;
+  bool full_stream = false;  // VISION_STREAM_NARROW_ROAD_FULL next to the low stream, set before camera_open
   CameraConfig cc;
   std::unique_ptr<const SensorInfo> sensor;
 
@@ -203,6 +204,7 @@ public:
 
   int buf_handle_yuv[MAX_IFE_BUFS] = {};
   int buf_handle_raw[MAX_IFE_BUFS] = {};
+  int buf_handle_full[MAX_IFE_BUFS] = {};
   int sync_objs_ife[MAX_IFE_BUFS] = {};
   int sync_objs_bps[MAX_IFE_BUFS] = {};
   uint64_t last_valid_request_id = 0;

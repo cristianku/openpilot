@@ -113,6 +113,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"RecordAudio", {PERSISTENT | BACKUP, BOOL}},
     {"RecordFront", {PERSISTENT | BACKUP, BOOL}},
     {"RecordFrontLock", {PERSISTENT, BOOL}},  // for the internal fleet
+    {"RecordRoadFullResolution", {PERSISTENT, BOOL, "0"}},
     {"SecOCKey", {PERSISTENT | DONT_LOG | BACKUP, STRING}},
     {"ShowDebugInfo", {PERSISTENT, BOOL}},
     {"RouteCount", {PERSISTENT, INT, "0"}},

@@ -142,3 +142,9 @@ sections:
       key: DisableUpdates
       equals: true
     - $ref: '#/macros/advanced_only'
+  - key: RecordRoadFullResolution
+    widget: toggle
+    title: Record Road at Full Resolution
+    description: fcamera is written at 2688x1520 instead of 1344x760, about twice the disk. Applies from the next drive.
+    enablement:
+    - $ref: '#/macros/offroad'

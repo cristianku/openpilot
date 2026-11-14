@@ -26,8 +26,8 @@ struct EncoderdState {
   // Sync logic for startup
   std::atomic<int> encoders_ready = 0;
   std::atomic<uint32_t> start_frame_id = 0;
-  bool camera_ready[VISION_STREAM_WIDE_ROAD + 1] = {};
-  bool camera_synced[VISION_STREAM_WIDE_ROAD + 1] = {};
+  bool camera_ready[VISION_STREAM_NARROW_ROAD_FULL + 1] = {};
+  bool camera_synced[VISION_STREAM_NARROW_ROAD_FULL + 1] = {};
 };
 
 // Handle initial encoder syncing by waiting for all encoders to reach the same frame id
@@ -94,7 +94,9 @@ void encoder_thread(EncoderdState *s, const LogCameraInfo &cam_info) {
 
       // Only one thumbnail can be generated per camera stream
       if (auto thumbnail_name = cam_info.encoder_infos[0].thumbnail_name) {
-        jpeg_encoder = std::make_unique<JpegEncoder>(thumbnail_name, buf_info.width / 4, buf_info.height / 4);
+        // the thumbnail keeps its size when the road is recorded at full resolution
+        const int downscale = cam_info.stream_type == VISION_STREAM_NARROW_ROAD_FULL ? 8 : 4;
+        jpeg_encoder = std::make_unique<JpegEncoder>(thumbnail_name, buf_info.width / downscale, buf_info.height / downscale);
       }
     }
 
@@ -164,13 +166,23 @@ void encoderd_thread(const LogCameraInfo (&cameras)[N]) {
   }
 
   if (!streams.empty()) {
+    auto find_camera = [&cameras](VisionStreamType stream) {
+      return std::find_if(std::begin(cameras), std::end(cameras), [stream](auto &cam) { return cam.stream_type == stream; });
+    };
+    // fcamera moves to the full stream only with its switch on, and only where camerad offers it (a sensor that scales)
+    const bool road_full = record_road_full && streams.count(VISION_STREAM_NARROW_ROAD_FULL) && find_camera(VISION_STREAM_NARROW_ROAD_FULL) != std::end(cameras);
+
     std::vector<std::thread> encoder_threads;
     for (auto stream : streams) {
-      auto it = std::find_if(std::begin(cameras), std::end(cameras),
-                             [stream](auto &cam) { return cam.stream_type == stream; });
+      if (stream == VISION_STREAM_NARROW_ROAD_FULL && !road_full) continue;
+      auto it = find_camera(stream);
       assert(it != std::end(cameras));
+      LogCameraInfo cam_info = *it;
+      if (road_full && stream == VISION_STREAM_NARROW_ROAD) {
+        cam_info.encoder_infos = {qcam_encoder_info};
+      }
       ++s.max_waiting;
-      encoder_threads.push_back(std::thread(encoder_thread, &s, *it));
+      encoder_threads.push_back(std::thread(encoder_thread, &s, cam_info));
     }
 
     for (auto &t : encoder_threads) t.join();

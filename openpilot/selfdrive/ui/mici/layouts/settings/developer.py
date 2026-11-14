@@ -85,6 +85,9 @@ class DeveloperLayoutMici(NavScroller):
                                                     "Braking (AEB).")
     self._navigation_toggle = BigParamControl("navigation (alpha)", "NavigationEnabled",
                                               description="Turn-by-turn navigation with a route map. Set a destination from comma connect.")
+    self._record_full_toggle = BigParamControl("record road at full resolution", "RecordRoadFullResolution",
+                                               description="fcamera is written at 2688x1520 instead of 1344x760, about twice the disk. " +
+                                                           "Applies from the next drive.")
     self._debug_mode_toggle = BigParamControl("ui debug mode", "ShowDebugInfo",
                                               toggle_callback=lambda checked: (gui_app.set_show_touches(checked), gui_app.set_show_fps(checked)),
                                               description="Show touch locations and the UI frame rate.")
@@ -97,6 +100,7 @@ class DeveloperLayoutMici(NavScroller):
       self._long_maneuver_toggle,
       self._lat_maneuver_toggle,
       self._alpha_long_toggle,
+      self._record_full_toggle,
       self._debug_mode_toggle,
       self._navigation_toggle,
     ])
@@ -111,8 +115,9 @@ class DeveloperLayoutMici(NavScroller):
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._debug_mode_toggle),
       ("NavigationEnabled", self._navigation_toggle),
+      ("RecordRoadFullResolution", self._record_full_toggle),
     )
-    onroad_blocked_toggles = (self._adb_toggle, self._joystick_toggle)
+    onroad_blocked_toggles = (self._adb_toggle, self._joystick_toggle, self._record_full_toggle)
     release_blocked_toggles = (self._joystick_toggle, self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle, self._navigation_toggle)
     engaged_blocked_toggles = (self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle)
 

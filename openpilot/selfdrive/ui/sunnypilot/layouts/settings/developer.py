@@ -52,7 +52,12 @@ class DeveloperLayoutSP(DeveloperLayout):
 
     self.error_log_btn = button_item(tr("Error Log"), tr("VIEW"), tr("View the error log for sunnypilot crashes."), callback=self._on_error_log_clicked)
 
-    self.items: list = [self.show_advanced_controls, self.enable_github_runner_toggle, self.enable_copyparty_toggle, self.prebuilt_toggle, self.error_log_btn,]
+    self.record_full_toggle = toggle_item_sp(tr("Record Road at Full Resolution"),
+                                             tr("fcamera is written at 2688x1520 instead of 1344x760, about twice the disk. Applies from the next drive."),
+                                             param="RecordRoadFullResolution", enabled=ui_state.is_offroad)
+
+    self.items: list = [self.show_advanced_controls, self.enable_github_runner_toggle, self.enable_copyparty_toggle, self.prebuilt_toggle, self.error_log_btn,
+                        self.record_full_toggle,]
 
   @staticmethod
   def _on_prebuilt_toggled(state):
