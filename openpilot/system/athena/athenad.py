@@ -48,6 +48,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.common.version import get_build_metadata
 from openpilot.common.hardware.hw import Paths
 from openpilot.system.athena.rpc import dispatcher, handle, is_call, is_response, loads
+import openpilot.sunnypilot.navd.athena  # noqa: F401  # sunnypilot: registers setNavRoute (destination with waypoints)
 
 
 ATHENA_HOST = os.getenv('ATHENA_HOST', 'wss://athena.comma.ai')

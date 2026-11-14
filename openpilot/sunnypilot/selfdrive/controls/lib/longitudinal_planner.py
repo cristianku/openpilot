@@ -5,14 +5,17 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 
+import numpy as np
+
 from openpilot.cereal import messaging, custom
 from opendbc.car import structs
 from openpilot.common.constants import CV
-from openpilot.selfdrive.car.cruise import V_CRUISE_MAX
+from openpilot.selfdrive.car.cruise import V_CRUISE_INITIAL, V_CRUISE_MAX, V_CRUISE_UNSET
 from openpilot.selfdrive.controls.lib.accel_boost import AccelBoost
 from openpilot.sunnypilot.selfdrive.controls.lib.accel_boost import AccelBoostSP
 from openpilot.sunnypilot.selfdrive.controls.lib.e2e_alerts_helper import E2EAlertsHelper
 from openpilot.sunnypilot.selfdrive.controls.lib.smart_cruise_control.smart_cruise_control import SmartCruiseControl
+from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit import SMARTSPEED_CRUISE_ACCEL_MIN
 from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.speed_limit_assist import SpeedLimitAssist
 from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.speed_limit_resolver import SpeedLimitResolver
 from openpilot.sunnypilot.selfdrive.selfdrived.events import EventsSP
@@ -33,9 +36,36 @@ class LongitudinalPlannerSP:
     self.e2e_alerts_helper = E2EAlertsHelper()
     self.accel_boost_sp = AccelBoostSP()
     self.openpilot_longitudinal = CP.openpilotLongitudinalControl
+    self.engage_only_v_target = V_CRUISE_UNSET
+    self.cluster_offset = 0.
 
     self.output_v_target = 0.
     self.output_a_target = 0.
+
+  def get_engage_only_target(self, long_enabled: bool, v_ego: float, v_cruise: float) -> float:
+    # The limit, then the last limit when it goes, and before any limit the speed at engagement (40 km/h from a stop)
+    if not long_enabled:
+      self.engage_only_v_target = V_CRUISE_UNSET
+      return v_cruise
+
+    if self.sla.output_v_target != V_CRUISE_UNSET:
+      self.engage_only_v_target = self.sla.output_v_target
+    elif self.engage_only_v_target == V_CRUISE_UNSET:
+      self.engage_only_v_target = max(v_ego, V_CRUISE_INITIAL * CV.KPH_TO_MS)
+    return min(self.engage_only_v_target, V_CRUISE_MAX * CV.KPH_TO_MS)
+
+  def get_cruise_accel_min(self, a_cruise_min: float, force_decel: bool) -> float:
+    # Two limits: Smartspeed slows down to the network's speed harder than the planner does to a set speed. A forced
+    # deceleration is not the network's: it stays openpilot's in every mode
+    return SMARTSPEED_CRUISE_ACCEL_MIN if self.sla.smartspeed and not force_decel else a_cruise_min
+
+  def update_cluster_offset(self, CS) -> float:
+    # What the dashboard adds to the speed the car holds, read from its set speed: a set speed of 50 on the PSA's
+    # dashboard is 47 on the CAN, so a limit of 50 is held as 47 too, like a set speed made with the buttons.
+    # 0 where openpilot keeps the set speed itself (vCruiseCluster == vCruise); the last one is kept while unset.
+    if 0 < CS.vCruise < V_CRUISE_UNSET and 0 < CS.vCruiseCluster < V_CRUISE_UNSET:
+      self.cluster_offset = float(np.clip(CS.vCruiseCluster - CS.vCruise, 0., 10.)) * CV.KPH_TO_MS
+    return self.cluster_offset
 
   def update_targets(self, sm: messaging.SubMaster, v_ego: float, a_ego: float, v_cruise: float) -> tuple[float, float]:
     CS = sm['carState']
@@ -45,16 +75,22 @@ class LongitudinalPlannerSP:
     long_enabled = sm['carControl'].enabled
     long_override = sm['carControl'].cruiseControl.override
 
-    # Smart Cruise Control
-    self.scc.update(sm, long_enabled, long_override, v_ego, a_ego, v_cruise)
-
     # Speed Limit Resolver
     self.resolver.update(v_ego, sm)
 
     # Speed Limit Assist
     has_speed_limit = self.resolver.speed_limit_valid or self.resolver.speed_limit_last_valid
     self.sla.update(long_enabled, long_override, v_ego, a_ego, v_cruise_cluster, self.resolver.speed_limit,
-                    self.resolver.speed_limit_final_last, has_speed_limit, self.resolver.distance, self.events_sp)
+                    self.resolver.speed_limit_final_last, has_speed_limit, self.resolver.distance, self.events_sp,
+                    self.update_cluster_offset(CS))
+
+    # Smartspeed: the set speed only engages, it is never the target, the car drives to the limit, also above it. A
+    # forced deceleration always wins.
+    if self.sla.smartspeed and not sm['controlsState'].forceDecel:
+      v_cruise = self.get_engage_only_target(long_enabled, v_ego, v_cruise)
+
+    # Smart Cruise Control: off in Smartspeed, the speed for curves is the network's (its toggles stay as they are)
+    self.scc.update(sm, long_enabled and not self.sla.smartspeed, long_override, v_ego, a_ego, v_cruise)
 
     targets = {
       LongitudinalPlanSource.cruise: (v_cruise, a_ego),

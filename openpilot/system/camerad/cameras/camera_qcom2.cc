@@ -254,9 +254,14 @@ void camerad_thread() {
   m.init();
 
   // *** per-cam init ***
+  // either Developer switch of the road at full resolution, read once like encoderd does: it applies from the next drive
+  Params params;
+  const bool road_full = params.getBool("RecordRoadFullResolution") || params.getBool("ReadSignsFullResolution");
+
   std::vector<std::unique_ptr<CameraState>> cams;
   for (const auto &config : ALL_CAMERA_CONFIGS) {
     auto cam = std::make_unique<CameraState>(&m, config);
+    cam->camera.full_stream = road_full && config.stream_type == VISION_STREAM_NARROW_ROAD;
     cam->init(&v);
     cams.emplace_back(std::move(cam));
   }

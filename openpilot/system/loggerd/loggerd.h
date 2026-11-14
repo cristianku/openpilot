@@ -165,6 +165,15 @@ const LogCameraInfo narrow_road_camera_info{
   .encoder_infos = {main_road_encoder_info, qcam_encoder_info}
 };
 
+// Only with the Developer switch RecordRoadFullResolution, read at the start like RecordFront: fcamera.hevc comes from here and
+// qcamera stays on the low stream.
+const bool record_road_full = Params().getBool("RecordRoadFullResolution");
+const LogCameraInfo narrow_road_full_camera_info{
+  .thread_name = "narrow_road_full_cam_encoder",
+  .stream_type = VISION_STREAM_NARROW_ROAD_FULL,
+  .encoder_infos = {main_road_encoder_info}
+};
+
 const LogCameraInfo wide_road_camera_info{
   .thread_name = "wide_road_cam_encoder",
   .stream_type = VISION_STREAM_WIDE_ROAD,
@@ -195,5 +204,5 @@ const LogCameraInfo stream_cabin_camera_info{
   .encoder_infos = {stream_cabin_encoder_info},
 };
 
-const LogCameraInfo cameras_logged[] = {narrow_road_camera_info, wide_road_camera_info, cabin_camera_info};
+const LogCameraInfo cameras_logged[] = {narrow_road_camera_info, wide_road_camera_info, cabin_camera_info, narrow_road_full_camera_info};
 const LogCameraInfo stream_cameras_logged[] = {stream_road_camera_info, stream_wide_road_camera_info, stream_cabin_camera_info};
