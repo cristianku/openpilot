@@ -122,87 +122,135 @@ sections:
         equals: true
 - id: speed_limits
   title: Speed Limits
-  description: Speed limit detection and offset behavior
-  items: []
-  sub_panels:
-  - id: speed_limit_settings
-    label: Speed Limit Settings
-    trigger_key: SpeedLimitMode
-    items:
-    - key: SpeedLimitMode
-      widget: multiple_button
-      title: Speed Limit Assist Mode
-      options:
-      - value: 0
-        label: 'Off'
-      - value: 1
-        label: Information
-      - value: 2
-        label: Warning
-      - value: 3
-        label: Assist
-        enablement:
-        - type: any
+  description: Speed limit detection, offset behavior and Smartspeed
+  items:
+  - key: SpeedLimitMode
+    widget: multiple_button
+    title: Speed Limit Assist Mode
+    description: >-
+      Smartspeed: the brain, the neural network that watches the road, chooses the speed. The cruise button only turns
+      it on and off: the car drives at the speed the brain knows, also above the set speed, and + and - do nothing: the
+      word SMART blinks to say so. Without a reading the car keeps the last speed the brain gave, or the speed it had when
+      cruise was turned on. Smart Cruise Control for curves does not act in this mode: the speed for a curve is the
+      brain's.
+    options:
+    - value: 0
+      label: 'Off'
+    - value: 1
+      label: Information
+    - value: 2
+      label: Warning
+    - value: 3
+      label: Assist
+      enablement:
+      - type: any
+        conditions:
+        - type: capability
+          field: has_longitudinal_control
+          equals: true
+        - type: capability
+          field: has_icbm
+          equals: true
+      - type: not
+        condition:
+          type: capability
+          field: brand
+          equals: rivian
+      - type: not
+        condition:
+          type: all
           conditions:
           - type: capability
-            field: has_longitudinal_control
-            equals: true
-          - type: capability
-            field: has_icbm
-            equals: true
-        - type: not
-          condition:
-            type: capability
             field: brand
-            equals: rivian
-        - type: not
-          condition:
-            type: all
-            conditions:
-            - type: capability
-              field: brand
-              equals: tesla
-            - type: capability
-              field: is_sp_release
-              equals: true
-    - key: SpeedLimitPolicy
-      widget: multiple_button
-      title: Speed Limit Source
-      options:
-      - value: 0
-        label: Car State Only
-      - value: 1
-        label: Map Data Only
-      - value: 2
-        label: Car State Priority
-      - value: 3
-        label: Map Data Priority
-      - value: 4
-        label: Combined
-    - key: SpeedLimitOffsetType
-      widget: multiple_button
-      title: Speed Limit Offset Type
-      options:
-      - value: 0
-        label: 'Off'
-      - value: 1
-        label: Fixed
-      - value: 2
-        label: Percentage
-    - key: SpeedLimitValueOffset
-      widget: option
-      title: Speed Limit Offset Value
-      min: -30
-      max: 30
-      step: 1
-      unit:
-        metric: km/h
-        imperial: mph
-      visibility:
-      - type: param_compare
-        key: SpeedLimitOffsetType
-        op: '>'
-        value: 0
+            equals: tesla
+          - type: capability
+            field: is_sp_release
+            equals: true
+    - value: 4
+      label: Smartspeed
+      enablement:
+      - type: any
+        conditions:
+        - type: capability
+          field: has_longitudinal_control
+          equals: true
+        - type: capability
+          field: has_icbm
+          equals: true
+      - type: not
+        condition:
+          type: capability
+          field: brand
+          equals: rivian
+      - type: not
+        condition:
+          type: all
+          conditions:
+          - type: capability
+            field: brand
+            equals: tesla
+          - type: capability
+            field: is_sp_release
+            equals: true
+  - key: SpeedLimitPolicy
+    widget: multiple_button
+    title: Speed Limit Source
+    description: "Smartspeed: only the speed-limits neural network's limit from the road camera, never the map. The
+      Smartspeed mode uses it by itself."
+    options:
+    - value: 0
+      label: Car State Only
+    - value: 1
+      label: Map Data Only
+    - value: 2
+      label: Car State Priority
+    - value: 3
+      label: Map Data Priority
+    - value: 4
+      label: Combined
+    - value: 6
+      label: Smartspeed
+    visibility:
+    - type: param_compare
+      key: SpeedLimitMode
+      op: '<'
+      value: 4
+  - key: SpeedLimitVisionDisplay
+    widget: toggle
+    title: Show Vision Reading
+    description: Show what the network reads from the road camera, in a fuchsia square on the right of the driving
+      screen. Information only, it does not change the speed. A dark square with a dash means no reading. Always shown
+      with the Smartspeed mode, and when Speed Limit Source is Smartspeed.
+    visibility:
+    - {type: capability, field: device_type, equals: mici}
+    - type: param_compare
+      key: SpeedLimitMode
+      op: '<'
+      value: 4
+  - key: SpeedLimitOffsetType
+    widget: multiple_button
+    title: Offset Type
+    options:
+    - value: 0
+      label: 'Off'
+    - value: 1
+      label: Fixed
+    - value: 2
+      label: Percentage
+  - key: SpeedLimitValueOffset
+    widget: option
+    title: Offset Value
+    min: -30
+    max: 30
+    step: 1
+    unit:
+      metric: km/h
+      imperial: mph
+    visibility:
+    - type: param_compare
+      key: SpeedLimitOffsetType
+      op: '>'
+      value: 0
 - id: smart_cruise
   title: Smart Cruise Control
   description: ''

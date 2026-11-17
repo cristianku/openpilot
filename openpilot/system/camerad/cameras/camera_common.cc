@@ -4,6 +4,7 @@
 #include <string>
 
 #include "common/swaglog.h"
+#include "system/camerad/cameras/nv12_info.h"
 #include "system/camerad/cameras/spectra.h"
 
 
@@ -27,6 +28,14 @@ void CameraBuf::init(SpectraCamera *cam, VisionIpcServer * v, int frame_cnt, Vis
 
   vipc_server->create_buffers_with_sizes(stream_type, VIPC_BUFFER_COUNT, out_img_width, out_img_height, cam->yuv_size, cam->stride, cam->uv_offset);
   LOGD("created %d YUV vipc buffers with size %dx%d", VIPC_BUFFER_COUNT, cam->stride, cam->y_height);
+
+  full_stream = cam->full_stream;
+  if (full_stream) {
+    auto [full_stride, full_y_height, full_uv_height, full_size] = get_nv12_info(sensor->frame_width, sensor->frame_height);
+    vipc_server->create_buffers_with_sizes(VISION_STREAM_NARROW_ROAD_FULL, VIPC_BUFFER_COUNT, sensor->frame_width, sensor->frame_height,
+                                           full_size, full_stride, full_stride * full_y_height);
+    LOGD("created %d full YUV vipc buffers with size %dx%d", VIPC_BUFFER_COUNT, full_stride, full_y_height);
+  }
 }
 
 CameraBuf::~CameraBuf() {
@@ -51,6 +60,14 @@ void CameraBuf::sendFrameToVipc() {
     cur_frame_data.timestamp_sof,
     cur_frame_data.timestamp_eof,
   };
+
+  // the full frame first: who reads both streams has it when the low one comes
+  if (full_stream) {
+    VisionBuf *full_buf = vipc_server->get_buffer(VISION_STREAM_NARROW_ROAD_FULL, cur_buf_idx);
+    full_buf->set_frame_id(cur_frame_data.frame_id);
+    vipc_server->send(full_buf, &extra);
+  }
+
   cur_yuv_buf->set_frame_id(cur_frame_data.frame_id);
   vipc_server->send(cur_yuv_buf, &extra);
 }

@@ -35,11 +35,18 @@ if HARDWARE.get_device_type() == "tizi":
 AudibleAlert = log.SelfdriveState.AudibleAlert
 AudibleAlertSP = custom.SelfdriveStateSP.AudibleAlert
 
+# A sign read by the vision network (speedVisionSP.signRead, the square on the screen pulses) beeps twice, once per
+# sign: the same sign is read again in every frame while it is in view, so a new beep comes only after SIGN_BEEP_GAP
+# seconds without a read. It never cuts an alert, and Quiet Mode silences it.
+SIGN_BEEP_GAP = 2.  # seconds
+DOUBLE_GAP = 0.1  # seconds of silence between the two beeps of promptDoubleHigh
+
 
 sound_list_sp: dict[int, tuple[str, int | None, float]] = {
   # AudibleAlertSP, file name, play count (none for infinite)
   AudibleAlertSP.promptSingleLow: ("prompt_single_low.wav", 1, MAX_VOLUME),
   AudibleAlertSP.promptSingleHigh: ("prompt_single_high.wav", 1, MAX_VOLUME),
+  AudibleAlertSP.promptDoubleHigh: ("prompt_single_high.wav", 1, MAX_VOLUME),  # the file twice (load_sounds)
 }
 
 sound_list: dict[int, tuple[str, int | None, float]] = {
@@ -85,6 +92,7 @@ class Soundd(QuietMode):
 
     self.selfdrive_timeout_alert = False
     self.pending_stop = False
+    self.sign_read_at = -math.inf
 
     self.spl_filter_weighted = FirstOrderFilter(0, 2.5, FILTER_DT, initialized=False)
 
@@ -102,6 +110,10 @@ class Soundd(QuietMode):
 
         length = wavefile.getnframes()
         self.loaded_sounds[sound] = np.frombuffer(wavefile.readframes(length), dtype=np.int16).astype(np.float32) / (2**16/2)
+
+    # One sound of the two beeps, not a play count of 2: a sound played once stops after its first pass.
+    single = self.loaded_sounds[AudibleAlertSP.promptDoubleHigh]
+    self.loaded_sounds[AudibleAlertSP.promptDoubleHigh] = np.concatenate([single, np.zeros(int(DOUBLE_GAP * SAMPLE_RATE), np.float32), single])
 
   def get_sound_data(self, frames): # get "frames" worth of data from the current alert sound, looping when required
 
@@ -164,6 +176,14 @@ class Soundd(QuietMode):
       self.update_alert(AudibleAlert.none)
       self.selfdrive_timeout_alert = False
 
+  def sign_beep(self, sm):
+    if not (sm.updated['speedVisionSP'] and sm['speedVisionSP'].signRead):
+      return
+    now = time.monotonic()
+    if now - self.sign_read_at > SIGN_BEEP_GAP and self.current_alert == AudibleAlert.none:
+      self.update_alert(AudibleAlertSP.promptDoubleHigh)
+    self.sign_read_at = now
+
   def calculate_volume(self, weighted_db):
     volume = ((weighted_db - AMBIENT_DB) / DB_SCALE) * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME
     return math.pow(VOLUME_BASE, (np.clip(volume, MIN_VOLUME, MAX_VOLUME) - 1))
@@ -180,7 +200,7 @@ class Soundd(QuietMode):
     import sounddevice as sd
     micd.patch_sounddevice(sd)
 
-    sm = messaging.SubMaster(['selfdriveState', 'selfdriveStateSP', 'soundPressure'])
+    sm = messaging.SubMaster(['selfdriveState', 'selfdriveStateSP', 'soundPressure', 'speedVisionSP'])
 
     with self.get_stream(sd) as stream:
       rk = Ratekeeper(20)
@@ -198,6 +218,7 @@ class Soundd(QuietMode):
             self.current_volume = self.calculate_volume(float(self.spl_filter_weighted.x))
 
         self.get_audible_alert(sm)
+        self.sign_beep(sm)
 
         # Ramp up immediate warning sound over 4s
         if self.current_alert == AudibleAlert.warningImmediate:
