@@ -1,9 +1,15 @@
 from openpilot.common.api.comma_connect import API_HOST as API_HOST, CommaConnectApi
 
+__all__ = ["API_HOST", "Api", "api_get", "get_key_pair"]
+
 
 class Api:
   def __init__(self, dongle_id):
     self.service = CommaConnectApi(dongle_id)
+
+  @property
+  def dongle_id(self):
+    return self.service.dongle_id
 
   def request(self, method, endpoint, **params):
     return self.service.request(method, endpoint, **params)

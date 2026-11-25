@@ -112,6 +112,7 @@ struct SelfdriveStateSP @0x81c2f05a394cf4af {
 
     promptSingleLow @31;
     promptSingleHigh @32;
+    promptDoubleHigh @33;  # promptSingleHigh twice: played by soundd alone when the vision network reads a sign
   }
 }
 
@@ -275,6 +276,9 @@ struct LongitudinalPlanSP @0xf35cc4560bbf6ec2 {
       speedLimitFinalLast @6 :Float32;
       speedLimitValid @7 :Bool;
       speedLimitLastValid @8 :Bool;
+      # Shadow mode (#117 step B): Smartspeed takes vision and a brain trained to stand says a valid 0 now
+      # (speedVisionSP.brainStatus "valid"): the car would stand. For the logs only, nothing acts on it yet.
+      visionStand @9 :Bool;
     }
 
     struct Assist {
@@ -289,6 +293,7 @@ struct LongitudinalPlanSP @0xf35cc4560bbf6ec2 {
       none @0;
       car @1;
       map @2;
+      vision @3;
     }
 
     enum AssistState {
@@ -495,7 +500,78 @@ struct GpsLocationSP @0xcb9fd56c7057593a {
   fused @8 :Bool;  # false while passing the raw fix through
 }
 
-struct CustomReserved11 @0xc2243c65e0340384 {
+# The speed limit read by the speed-limits neural network from the road camera (speedvisiond): the limit it remembers
+# from the signs it read, or 0 when it is not sure, so the resolver takes the map instead (as with carStateSP).
+struct SpeedVisionSP @0xc2243c65e0340384 {
+  speedLimit @0 :Float32;  # m/s, 0 when not sure
+  modelName @1 :Text;
+  signRead @2 :Bool;  # a sign was read and confirmed in this frame (the same limit again too): the UI pulses
+  roadType @3 :Text;  # what the road-type network sees (town, rural, expressway, motorway, ramp, parking, zone30, garage, merge: the acceleration lane), "" without it
+
+  # For the logs only, nothing reads them on the car (speed_limits/vision.py: LIMIT_STATES, LIMIT_REASONS, raw_reading).
+  # What speedLimit says: "limit" (it is the limit), "none" (the road's kind is known and has no general limit: the
+  # German motorway), "unknown" (nothing gives one: the start of a drive, the end of a limit on a road of unknown
+  # kind). speedLimit is 0 unless "limit".
+  speedLimitState @4 :Text;
+  # The rule that set the limit held, kept while a rule that reads no sign only sets the same limit and state again
+  # (there is no timeout: the limit holds until a rule sets another): "sign" (a number confirmed), "end_sign" (the end
+  # of a limit: the road's general limit), "road_sign" (a motorway, expressway or town sign or its end: its general
+  # limit), "ramp_end" (the ramp's limit ended on the acceleration lane or the carriageway), "carriageway" (a number read
+  # off the carriageways ended on one), "car_park" (a car park seen: the release's garage limit, or its car park limit
+  # in the open when the road-type network tells a garage from it), "road_type" (the general limit of the road type
+  # seen where no sign gives one), "country_change" (jurisdiction changed), "zone30" (a 30 zone seen lowers an implicit
+  # town limit, never an explicit number equal to that limit), "brain" (the network with memory said it: no rule runs);
+  # "" before the first.
+  speedLimitReason @5 :Text;
+  # The last sign read that the memory can take, the best of its frame at any confidence, kept until another: its class
+  # ("maximum_speed:80", "cancellation" the end of a limit, "other_sign:motorway_start" a road sign...), "" before the
+  # first; its physical km/h equivalent (0 for an unknown unit, the end of a limit or a road sign); the classifier's probability
+  # (0..1; under the release's min_confidence the memory drops it); whether the limit was set from it in its frame
+  # (confirmed and not overruled: a higher number in a car park, another sign of the frame, a road sign where it keeps
+  # the limit held).
+  rawSignClass @6 :Text;
+  rawSignSpeed @7 :Float32;
+  rawSignConfidence @8 :Float32;
+  rawSignTaken @9 :Bool;
+
+  # The distance (m) to the sign ahead (a number, the end of a limit, a motorway or expressway sign or its end; the
+  # nearest of the frame by its size), from its size on the camera and the metres driven since (speed_limits/vision.py:
+  # SignDistance): the screen shows it for the driver to check, and speedLimitAheadDistance starts from it; 0 without
+  # one, once the car has passed it, or 15 s after it was last seen.
+  # signSize: the side (frame pixels: a round sign's larger, a road sign's height) of that sign in this frame, 0 when
+  # none is seen in it.
+  signDistance @10 :Float32;
+  signSize @11 :Float32;
+  # Original written number (never converted), its unit ("km/h", "mph", "unknown") and ISO country at that reading.
+  # rawSignSpeed @7 remains physical km/h; 0 when the raw unit is unknown. Old logs leave these fields empty.
+  rawSignValue @12 :Float32;
+  rawSignUnit @13 :Text;
+  rawSignCountry @14 :Text;
+  # A limit read on a sign ahead starts at the sign, as the map's does (speed_limits/vision.py: LimitAhead): until the
+  # car gets there speedLimit stays the limit held, and the new one is here with the metres left, the same two data as
+  # liveMapDataSP's for sunnypilot's resolver. 0 with none ahead. speedLimitState and speedLimitReason already say the
+  # new limit.
+  speedLimitAhead @15 :Float32;
+  speedLimitAheadDistance @16 :Float32;
+  # A raw reading in this frame (the rawSign* fields are its): the sign it is from is in view. The screen's reading
+  # square shows rawSign* with its border red while it is, grey once the sign is passed and the last reading stays.
+  rawSignSeen @17 :Bool;
+  # Whom the applicability network (speed_limits/applicability.py) gave the sign of rawSign*: "own_road", "other_road"
+  # (a side street, an exit, the lane beside: not taken, rawSignTaken false), "unresolved" (it abstains: taken); ""
+  # when it did not rule it (a release without it, a family it did not learn) or in an old log.
+  rawSignRoad @18 :Text;
+  # What a 0 of speedLimit is (speed_limits/brain.py: BrainReader.status, #117 step B): "legacy" (the rules, a brain not
+  # trained to stand, an old log: 0 is "not sure", as always), "valid" (a brain trained to stand, its last finite answer
+  # at most a second old: 0 is its answer, the car stands), "unavailable" (that brain has no fresh answer: before its
+  # first step, after a step that was not finite, or older than a second). Shadow mode: the resolver only logs what a
+  # valid 0 would do (LongitudinalPlanSP.SpeedLimit.Resolver.visionStand), nothing acts on it yet.
+  brainStatus @19 :BrainStatus;
+
+  enum BrainStatus {
+    legacy @0;
+    valid @1;
+    unavailable @2;
+  }
 }
 
 struct CustomReserved12 @0x9ccdc8676701b412 {

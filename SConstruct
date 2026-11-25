@@ -293,6 +293,9 @@ SConscript([
   'openpilot/selfdrive/ui/SConscript',
 ])
 
+# The speed-limits networks, compiled at the device's build
+SConscript(['openpilot/sunnypilot/speed_limits/SConscript'])
+
 # Build desktop-only tools
 if GetOption('extras') and arch != "comma_arm64":
   SConscript([

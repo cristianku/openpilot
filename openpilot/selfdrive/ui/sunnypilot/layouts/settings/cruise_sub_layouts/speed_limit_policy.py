@@ -13,17 +13,26 @@ from openpilot.system.ui.sunnypilot.widgets.list_view import multiple_button_ite
 from openpilot.system.ui.widgets.network import NavButton
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.sunnypilot.widgets import get_highlighted_description
 
-SPEED_LIMIT_POLICY_BUTTONS = [tr("Car Only"), tr("Map Only"), tr("Car First"), tr("Map First"), tr("Combined")]
+# Map Data + Vision (5) is no longer offered: the buttons give these values, and a stored 5 shows as Smartspeed (6)
+SPEED_LIMIT_POLICY_VALUES = [0, 1, 2, 3, 4, 6]
+
+SPEED_LIMIT_POLICY_BUTTONS = [tr("Car Only"), tr("Map Only"), tr("Car First"), tr("Map First"), tr("Combined"),
+                              tr("Smartspeed")]
 
 SPEED_LIMIT_POLICY_DESCRIPTIONS = [
   tr("Car Only: Use Speed Limit data only from Car"),
   tr("Map Only: Use Speed Limit data only from OpenStreetMaps"),
   tr("Car First: Use Speed Limit data from Car if available, else use from OpenStreetMaps"),
   tr("Map First: Use Speed Limit data from OpenStreetMaps if available, else use from Car"),
-  tr("Combined: Use combined Speed Limit data from Car & OpenStreetMaps")
+  tr("Combined: Use combined Speed Limit data from Car & OpenStreetMaps"),
+  tr("Smartspeed: Use only the speed limit of the speed-limits neural network from the road camera, no map"),
 ]
+
+
+def policy_button(value: int) -> int:
+  value = 6 if value == 5 else value
+  return SPEED_LIMIT_POLICY_VALUES.index(value) if value in SPEED_LIMIT_POLICY_VALUES else 0
 
 
 class SpeedLimitPolicyLayout(Widget):
@@ -40,8 +49,8 @@ class SpeedLimitPolicyLayout(Widget):
       title=lambda: tr("Speed Limit Source"),
       description=self._get_policy_description,
       buttons=SPEED_LIMIT_POLICY_BUTTONS,
-      param="SpeedLimitPolicy",
-      button_width=250,
+      callback=self._set_policy,
+      button_width=220,
     )
 
     items = [
@@ -50,8 +59,13 @@ class SpeedLimitPolicyLayout(Widget):
     return items
 
   @staticmethod
+  def _set_policy(button: int):
+    ui_state.params.put("SpeedLimitPolicy", SPEED_LIMIT_POLICY_VALUES[button])
+
+  @staticmethod
   def _get_policy_description():
-    return get_highlighted_description(ui_state.params, "SpeedLimitPolicy", SPEED_LIMIT_POLICY_DESCRIPTIONS)
+    selected = policy_button(int(ui_state.params.get("SpeedLimitPolicy", return_default=True)))
+    return "<br>".join(f"<b>{desc}</b>" if i == selected else desc for i, desc in enumerate(SPEED_LIMIT_POLICY_DESCRIPTIONS))
 
   def _render(self, rect):
     self._back_button.set_position(self._rect.x, self._rect.y + 20)
@@ -61,5 +75,6 @@ class SpeedLimitPolicyLayout(Widget):
     self._scroller.render(content_rect)
 
   def show_event(self):
+    self._speed_limit_policy.action_item.selected_button = policy_button(int(ui_state.params.get("SpeedLimitPolicy", return_default=True)))
     self._scroller.show_event()
     self._speed_limit_policy.show_description(True)

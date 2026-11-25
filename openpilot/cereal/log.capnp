@@ -2649,7 +2649,7 @@ struct Event {
     liveMapDataSP @115 :Custom.LiveMapDataSP;
     modelDataV2SP @116 :Custom.ModelDataV2SP;
     gpsLocationSP @136 :Custom.GpsLocationSP;
-    customReserved11 @137 :Custom.CustomReserved11;
+    speedVisionSP @137 :Custom.SpeedVisionSP;
     customReserved12 @138 :Custom.CustomReserved12;
     customReserved13 @139 :Custom.CustomReserved13;
     customReserved14 @140 :Custom.CustomReserved14;
